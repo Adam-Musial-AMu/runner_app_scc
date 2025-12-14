@@ -1,0 +1,30 @@
+# --- Core data stack ---
+pandas>=1.5,<2.2.0
+numpy>=1.23,<3
+scipy>=1.10,<2
+
+# --- Modeling / ML ---
+scikit-learn>=1.4,<1.5
+pycaret[analysis]==3.3.2
+joblib>=1.3,<2
+
+# --- Visualization ---
+matplotlib>=3.6,<3.8
+seaborn>=0.13,<1
+
+# --- Streamlit app ---
+streamlit>=1.30,<2
+
+# --- Langfuse + LLM ---
+langfuse==2.51.4
+openai>=1.30,<2
+python-dotenv>=1,<2
+
+# --- DigitalOcean Spaces ---
+boto3>=1.28,<2
+s3fs>=2024.6.0
+fsspec>=2024.6.0
+
+# --- Utilities ---
+requests>=2.31,<3
+httpx>=0.27,<1
