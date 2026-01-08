@@ -1,5 +1,6 @@
 import json
 import re
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -31,7 +32,6 @@ try:
 
     langfuse_client = Langfuse()
 except Exception as e:
-    import streamlit as st
     st.error("Langfuse import FAILED")
     st.code(str(e))
 
@@ -269,6 +269,26 @@ def post_normalize_extracted(extracted: dict, user_text: str):
 
     return extracted
 
+def estimate_openai_cost_usd(
+    prompt_tokens: int,
+    completion_tokens: int,
+    model: str = "gpt-4o-mini",
+) -> float:
+    PRICES = {
+        "gpt-4o-mini": {
+            "prompt": 0.15 / 1_000_000,
+            "completion": 0.60 / 1_000_000,
+        }
+    }
+
+    p = PRICES.get(model)
+    if not p:
+        return 0.0
+
+    return (
+        prompt_tokens * p["prompt"]
+        + completion_tokens * p["completion"]
+    )
 
 def llm_extract_to_dict(text: str, keys: list[str], mode_hint: str):
     """
@@ -282,7 +302,6 @@ def llm_extract_to_dict(text: str, keys: list[str], mode_hint: str):
         extracted = post_normalize_extracted(extracted, text)
         return extracted, {"method": "regex", "ok": True, "error": None}
 
-    import os
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         extracted = regex_fallback_extract(text)
@@ -320,6 +339,15 @@ User text:
                 {"role": "user", "content": user},
             ],
         )
+        
+        usage = resp.usage
+
+        cost_usd = estimate_openai_cost_usd(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            model="gpt-4o-mini",
+        )
+
         content = resp.choices[0].message.content.strip()
         extracted = json.loads(content)
 
@@ -327,8 +355,19 @@ User text:
         extracted = {k: extracted.get(k, None) for k in keys}
         extracted = post_normalize_extracted(extracted, text)
 
-        return extracted, {"method": "openai", "ok": True, "error": None}
-
+        return extracted, {
+            "method": "openai",
+            "ok": True,
+            "error": None,
+            "llm": {
+                "model": "gpt-4o-mini",
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "total_tokens": usage.total_tokens,
+                "cost_usd_estimated": round(cost_usd, 6),
+            },
+        }
+    
     except Exception as e:
         fallback = regex_fallback_extract(text)
         fallback = {k: fallback.get(k, None) for k in keys}
