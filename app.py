@@ -213,14 +213,14 @@ def extract_time_for_distance(text: str, distance_km: int) -> int | None:
       - '5 km 20 min'
       - '20 min na 5 km'
     """
-    # czas + NA + dystans (najczęstsze w PL)
+    # 'czas' + 'na' + distance (most common in Poland)
     pat_before = rf"""
         (?P<time>\d{{1,2}}:\d{{2}}(?::\d{{2}})?|\d{{1,3}}\s*min(?:\s*\d{{1,2}}\s*s)?)
         \s*(?:na\s*)?
         {distance_km}\s*(?:km|k)
     """
 
-    # dystans + czas (bez przechodzenia przez inny dystans)
+    # distance + 'czas'
     pat_after = rf"""
         {distance_km}\s*(?:km|k)
         [^0-9k]*?
@@ -426,8 +426,7 @@ def prepare_features_for_model(extracted: dict, schema: dict):
 
 def build_pandera_schema_from_artifact(schema_json: dict) -> pa.DataFrameSchema:
     """
-    Mapuje Twój schema.json -> Pandera DataFrameSchema.
-    UWAGA: nullable=True dla wszystkich pól (bo 'required' wymuszamy osobno).
+    nullable=True for all fields (because we enforce ‘required’ separately).
     """
     features = schema_json.get("features", {})
     columns = {}
@@ -463,9 +462,9 @@ def build_pandera_schema_from_artifact(schema_json: dict) -> pa.DataFrameSchema:
 
 def required_fields_for_run(selected_name: str, schema: dict):
     """
-    Zasada:
-      - zawsze wymagane: Wiek, Płeć, Czas_5km_sek
-      - dla modelu 10K dodatkowo wymagamy Czas_10km_sek (jeśli to uruchamiamy)
+    Rule:
+        - always required: Age, Gender, Time_5km_sec
+        - for the 10K model, we additionally require Time_10km_sec (if we are running it)
     """
     req = ["Wiek", "Płeć", "Czas_5km_sek"]
     if selected_name == "PRE_RACE_10K":
@@ -484,10 +483,10 @@ def find_missing_required(row: dict, required: list[str]) -> list[str]:
 
 def choose_bundle_auto(extracted: dict, b5: dict, b10: dict | None):
     """
-    AUTO: wybierz 10K TYLKO gdy:
-      - masz artefakty 10K
-      - user podał 10k
-      - user podał 5k (bo 5k jest zawsze wymagane)
+    AUTO: select 10K ONLY when:
+      - you have 10K artifacts
+      - the user has provided 10k
+      - the user has provided 5k (because 5k is always required)
     """
     has_5k = extracted.get("Czas_5km_sek") is not None
     has_10k = extracted.get("Czas_10km_sek") is not None
@@ -509,9 +508,7 @@ st.title("🏃 Predykcja czasu półmaratonu")
 b5, b10 = get_bundles()
 
 with st.sidebar:
-    # =========================
     # PREDICTION SETTINGS
-    # =========================
     st.header("⚙️ Ustawienia predykcji")
 
     mode = st.selectbox(
@@ -532,9 +529,7 @@ with st.sidebar:
 
     st.divider()
 
-    # =========================
     # MODEL ACCURACY
-    # =========================
     st.subheader("📊 Dokładność modelu")
 
     # --- 5 km ---
@@ -569,9 +564,7 @@ with st.sidebar:
 
     st.divider()
 
-    # =========================
     # ADDITIONAL OPTIONS
-    # =========================
     st.subheader("🔍 Opcje dodatkowe")
 
     use_llm = st.checkbox(
@@ -682,7 +675,7 @@ if btn_extract or btn_predict:
                         "Model 10K może dać ostrożniejszą prognozę."
                     )
 
-        # UI: extraction
+        # Extraction
         col3, col4 = st.columns([1, 1])
 
         with col3:
@@ -712,7 +705,7 @@ if btn_extract or btn_predict:
                 if btn_predict:
                     st.stop()
 
-        # UI: prediction
+        # Prediction
         with col4:
             if btn_predict:
                 y_hat = run_prediction(model, validated_df)
