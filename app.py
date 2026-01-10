@@ -207,6 +207,34 @@ def text_mentions_10k(text: str) -> bool:
     t = (text or "").lower()
     return re.search(r"\b10\s*(km|k)\b", t) is not None
 
+def extract_time_for_distance(text: str, distance_km: int) -> int | None:
+    """
+    Bezpiecznie wiąże czas z KONKRETNYM dystansem.
+    Obsługuje:
+      - '5 km 20 min'
+      - '20 min na 5 km'
+    """
+    # czas + NA + dystans (najczęstsze w PL)
+    pat_before = rf"""
+        (?P<time>\d{{1,2}}:\d{{2}}(?::\d{{2}})?|\d{{1,3}}\s*min(?:\s*\d{{1,2}}\s*s)?)
+        \s*(?:na\s*)?
+        {distance_km}\s*(?:km|k)
+    """
+
+    # dystans + czas (bez przechodzenia przez inny dystans)
+    pat_after = rf"""
+        {distance_km}\s*(?:km|k)
+        [^0-9k]*?
+        (?P<time>\d{{1,2}}:\d{{2}}(?::\d{{2}})?|\d{{1,3}}\s*min(?:\s*\d{{1,2}}\s*s)?)
+    """
+
+    for pat in (pat_before, pat_after):
+        m = re.search(pat, text, re.VERBOSE)
+        if m:
+            return time_to_seconds(m.group("time"))
+
+    return None
+
 
 def regex_fallback_extract(text: str):
     """
@@ -231,20 +259,10 @@ def regex_fallback_extract(text: str):
         out["Płeć"] = "K"
 
     # 5k time
-    m_5k = re.search(
-        r"(5\s*(km|k))[^0-9]*(\d{1,2}:\d{2}(:\d{2})?|\d{1,3}\s*min(\s*\d{1,2}\s*s)?)",
-        t
-    )
-    if m_5k:
-        out["Czas_5km_sek"] = time_to_seconds(m_5k.group(3))
+    out["Czas_5km_sek"] = extract_time_for_distance(t, 5)
 
     # 10k time
-    m_10k = re.search(
-        r"(10\s*(km|k))[^0-9]*(\d{1,2}:\d{2}(:\d{2})?|\d{1,3}\s*min(\s*\d{1,2}\s*s)?)",
-        t
-    )
-    if m_10k:
-        out["Czas_10km_sek"] = time_to_seconds(m_10k.group(3))
+    out["Czas_10km_sek"] = extract_time_for_distance(t, 10)
 
     return out
 
