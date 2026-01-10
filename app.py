@@ -193,7 +193,6 @@ def schema_union_keys(schema_a: dict, schema_b: dict | None):
     keys = set(schema_a.get("features", {}).keys())
     if schema_b:
         keys |= set(schema_b.get("features", {}).keys())
-    # typowo wymagane w Twoim przypadku:
     keys |= {"Wiek", "Płeć", "Czas_5km_sek", "Czas_10km_sek", "Rok"}
     return sorted(keys)
 
@@ -436,7 +435,7 @@ def build_pandera_schema_from_artifact(schema_json: dict) -> pa.DataFrameSchema:
     for field, rules in features.items():
         t = rules.get("type")
 
-        # Domyślnie: nullable (wymagalność sprawdzamy osobno)
+        # default: nullable (we check for required fields separately)
         nullable = True
 
         if t == "int":
@@ -452,11 +451,11 @@ def build_pandera_schema_from_artifact(schema_json: dict) -> pa.DataFrameSchema:
             checks = []
             if allowed:
                 checks.append(Check.isin(allowed))
-            # kategorie zostawiamy jako object/str
+            # we leave the categories as object/str
             columns[field] = Column(object, checks=checks, nullable=nullable, coerce=True)
 
         else:
-            # fallback: pozwól, ale nie waliduj restrykcyjnie typów
+            # fallback: allow, but do not validate types restrictively
             columns[field] = Column(object, nullable=nullable, coerce=False)
 
     return DataFrameSchema(columns, coerce=True, strict=False)
@@ -470,7 +469,7 @@ def required_fields_for_run(selected_name: str, schema: dict):
     """
     req = ["Wiek", "Płeć", "Czas_5km_sek"]
     if selected_name == "PRE_RACE_10K":
-        # jeśli schema ma 10k, to wymagamy
+        # if the schema has 10k, then we require it
         if "Czas_10km_sek" in schema.get("features", {}):
             req.append("Czas_10km_sek")
     return req
@@ -511,7 +510,7 @@ b5, b10 = get_bundles()
 
 with st.sidebar:
     # =========================
-    # USTAWIENIA PREDYKCJI
+    # PREDICTION SETTINGS
     # =========================
     st.header("⚙️ Ustawienia predykcji")
 
@@ -534,7 +533,7 @@ with st.sidebar:
     st.divider()
 
     # =========================
-    # DOKŁADNOŚĆ MODELU
+    # MODEL ACCURACY
     # =========================
     st.subheader("📊 Dokładność modelu")
 
@@ -571,7 +570,7 @@ with st.sidebar:
     st.divider()
 
     # =========================
-    # OPCJE DODATKOWE
+    # ADDITIONAL OPTIONS
     # =========================
     st.subheader("🔍 Opcje dodatkowe")
 
@@ -612,7 +611,6 @@ if btn_extract or btn_predict:
             st.warning("Wpisz tekst z danymi (płeć, wiek, czas 5 km).")
             st.stop()
 
-        # --- kluczowa poprawka: ekstrakcja na superset kluczy (5k + 10k) ---
         keys = schema_union_keys(b5["schema"], b10["schema"] if b10 else None)
 
         # Extraction
@@ -628,7 +626,6 @@ if btn_extract or btn_predict:
             extracted = post_normalize_extracted(extracted, user_text)
             meta = {"method": "regex", "ok": True, "error": None}
 
-        # --- wybór modelu ---
         mode = st.session_state.model_mode
 
         if mode == "Na podstawie czasu na 5 i 10 km (10K)":
@@ -668,7 +665,7 @@ if btn_extract or btn_predict:
         required = required_fields_for_run(selected_name, schema)
         missing_required = find_missing_required(row, required)
 
-        # Spójność 5 km vs 10 km
+        # Consistency 5 km vs. 10 km
         if btn_predict:
             if (
                 row.get("Czas_5km_sek") is not None
@@ -685,7 +682,7 @@ if btn_extract or btn_predict:
                         "Model 10K może dać ostrożniejszą prognozę."
                     )
 
-        # --- UI: ekstrakcja ---
+        # UI: extraction
         col3, col4 = st.columns([1, 1])
 
         with col3:
@@ -715,7 +712,7 @@ if btn_extract or btn_predict:
                 if btn_predict:
                     st.stop()
 
-        # --- Predykcja ---
+        # UI: prediction
         with col4:
             if btn_predict:
                 y_hat = run_prediction(model, validated_df)
