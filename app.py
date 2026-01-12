@@ -662,7 +662,7 @@ with st.sidebar:
         "Wykorzystaj AI do rozpoznania danych z podanego tekstu",
         value=True,
         help=(
-            "Wykorzystuje model językowy OpenAI do wyciągnięcia danych z podanego tekstu."
+            "Wykorzystuje model językowy OpenAI do wyciągnięcia danych z podanego tekstu - w przeciwnym razie REGEX."
         ),
     )
 
