@@ -460,27 +460,6 @@ def build_pandera_schema_from_artifact(schema_json: dict) -> pa.DataFrameSchema:
     return DataFrameSchema(columns, coerce=True, strict=False)
 
 
-# def required_fields_for_run(selected_name: str, schema: dict):
-#     """
-#     Rule:
-#         - always required: Age, Gender, Time_5km_sec
-#         - for the 10K model, we additionally require Time_10km_sec (if we are running it)
-#     """
-#     req = ["Wiek", "Płeć", "Czas_5km_sek"]
-#     if selected_name == "PRE_RACE_10K":
-#         # if the schema has 10k, then we require it
-#         if "Czas_10km_sek" in schema.get("features", {}):
-#             req.append("Czas_10km_sek")
-#     return req
-
-
-# def find_missing_required(row: dict, required: list[str]) -> list[str]:
-#     missing = []
-#     for k in required:
-#         if k not in row or row[k] is None or row[k] == "":
-#             missing.append(k)
-#     return missing
-
 def choose_bundle_auto(extracted: dict, b5: dict, b10: dict | None):
     """
     AUTO: select 10K ONLY when:
@@ -513,13 +492,13 @@ def pandera_errors_to_user_messages(
 
         rules = schema["features"].get(field, {})
 
-        # --- Płeć ---
+        # --- Sex ---
         if field == "Płeć":
             messages.append(
                 "❌ **Płeć**: wpisz „M” (mężczyzna) lub „K” (kobieta)."
             )
 
-        # --- Wiek ---
+        # --- Age ---
         elif field == "Wiek":
             min_v = rules.get("min")
             max_v = rules.get("max")
@@ -527,7 +506,7 @@ def pandera_errors_to_user_messages(
                 f"❌ **Wiek**: podaj liczbę w zakresie **{min_v}–{max_v} lat**."
             )
 
-        # --- Czas 5 km ---
+        # --- Time 5 km ---
         elif field == "Czas_5km_sek":
             min_v = rules.get("min")
             max_v = rules.get("max")
@@ -537,7 +516,7 @@ def pandera_errors_to_user_messages(
                 f"(zakres: {min_v//60}–{max_v//60} min)."
             )
 
-        # --- Rok ---
+        # --- Year ---
         elif field == "Rok":
             allowed = rules.get("allowed", [])
             messages.append(
@@ -549,7 +528,7 @@ def pandera_errors_to_user_messages(
                 f"❌ **{field}**: nieprawidłowa wartość ({value})."
             )
 
-    # usuń duplikaty
+    # remove duplicates
     return list(dict.fromkeys(messages))
 
 
@@ -559,6 +538,8 @@ def pandera_errors_to_user_messages(
 st.title("🏃 Predykcja czasu półmaratonu")
 
 b5, b10 = get_bundles()
+
+# Sidebar
 
 with st.sidebar:
     # PREDICTION SETTINGS
@@ -634,7 +615,7 @@ with st.sidebar:
         help="Wyświetla dane przekazane do modelu predykcyjnego.",
     )
 
-# main    
+# Main UI   
 
 user_text = st.text_area(
     label="Wpisz jednym tekstem: wiek, płeć oraz czas na 5 km (w celu uzyskania dokładniejszych szacunków możesz podać również czas na 10 km):",
@@ -724,10 +705,7 @@ if btn_extract or btn_predict:
 
             st.stop()
 
-        # Required fields enforcement
         row = validated_df.iloc[0].to_dict()
-        # required = required_fields_for_run(selected_name, schema)
-        # missing_required = find_missing_required(row, required)
 
         # Consistency 5 km vs. 10 km
         if btn_predict:
@@ -764,20 +742,6 @@ if btn_extract or btn_predict:
                     json.dumps(row_for_display, indent=2, ensure_ascii=False),
                     language="json"
                 )
-
-            # if missing_required:
-            #     st.warning("Brakuje danych wymaganych do predykcji:")
-            #     st.write(", ".join(missing_required))
-
-            #     if "Czas_5km_sek" in missing_required:
-            #         st.info(
-            #             "Czas na 5 km jest obowiązkowy i nie będzie "
-            #             "wyliczany z 10 km — podaj go jawnie."
-            #         )
-
-            #     st.info("Uzupełnij dane w tekście i spróbuj ponownie.")
-            #     if btn_predict:
-            #         st.stop()
 
         # Prediction
         with col4:
