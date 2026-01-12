@@ -125,32 +125,6 @@ Ekstrakcja danych wejściowych przez LLM jest monitorowana przy użyciu **Langfu
 
 ---
 
-## 🔄 Flow aplikacji (czytelny diagram)
-
-```mermaid
-flowchart TD
-    A[Użytkownik wpisuje tekst] --> B[Ekstrakcja danych]
-    B -->|LLM| C[OpenAI]
-    B -->|Fallback| D[Regex]
-    C --> E[Post-normalizacja]
-    D --> E
-
-    E --> F[Anti-hallucination guard]
-    F --> G[Wybór modelu]
-    G -->|AUTO| H{Dostępny 10 km?}
-    H -->|TAK| I[Model PRE_RACE_10K]
-    H -->|NIE| J[Model PRE_RACE_5K]
-
-    I --> K[Budowa DataFrame]
-    J --> K
-    K --> L[Pandera validation]
-    L -->|OK| M[Predykcja PyCaret]
-    L -->|Błąd| N[Komunikat UI]
-
-    M --> O[Wynik + tempo + MAE]
-
----
-
 ## 🛠️ Stack technologiczny
 
 - **Python 3.10**
