@@ -57,9 +57,9 @@ if st.session_state.get("btn_reset"):
     st.session_state.pop("btn_reset", None)
     st.rerun()
 
-# =========================
+# -------------------------
 # DigitalOcean Spaces config
-# =========================
+# -------------------------
 SPACES_BUCKET = os.getenv("SPACES_BUCKET", "amu")
 SPACES_ENDPOINT = os.getenv("SPACES_ENDPOINT")
 SPACES_KEY = os.getenv("SPACES_KEY")
@@ -118,7 +118,7 @@ def load_latest_bundle(model_subdir: str):
 
     latest = json.loads(latest_path.read_text(encoding="utf-8"))
 
-    # --- pozostałe pliki ---
+    # --- other files ---
     model_pkl = local_dir / latest["model_pkl"]
     meta_json = local_dir / latest["metadata_json"]
     schema_json = local_dir / latest["schema_json"]
@@ -137,7 +137,7 @@ def load_latest_bundle(model_subdir: str):
     schema = json.loads(schema_json.read_text(encoding="utf-8"))
     metadata = json.loads(meta_json.read_text(encoding="utf-8"))
 
-    # PyCaret: ścieżka BEZ .pkl
+    # PyCaret: path without .pkl
     model_stem = str(model_pkl.with_suffix(""))
     model = load_model(model_stem)
 
@@ -592,31 +592,29 @@ def pandera_errors_to_user_messages(
     return list(dict.fromkeys(messages))
 
 def render_pace_plot(y_hat: float):   
-    # --- dystans ---
+    # distance
     total_km = 21
     km = np.arange(1, total_km + 1)
 
-    # --- średnie tempo (min/km) ---
+    # average pace (min/km)
     avg_pace = (y_hat / 60) / 21.0975
 
-    # --- realistyczna zmienność ---
-    np.random.seed(42)  # stabilna wizualizacja
-    noise = np.random.normal(0, 0.12, size=total_km)      # losowe wahania (~±7 s/km)
-    fatigue_trend = np.linspace(0, 0.15, total_km)        # narastające zmęczenie (~+9 s/km)
+    # realistic variability
+    np.random.seed(42)  # stable visualization
+    noise = np.random.normal(0, 0.12, size=total_km)      # random fluctuations (~±7 s/km)
+    fatigue_trend = np.linspace(0, 0.15, total_km)        # increasing fatigue (~+9 s/km)
 
-    # surowa seria tempa
+    # raw pace series
     pace_series = avg_pace + noise + fatigue_trend
 
-    # 🔑 KLUCZOWA POPRAWKA:
-    # wymuszamy, aby średnia serii = avg_pace
     pace_series -= pace_series.mean() - avg_pace
 
-    # --- pas zmienności ---
+    # variability band
     variability = 0.15  # ~±9 s/km
     lower = pace_series - variability
     upper = pace_series + variability
 
-    # --- wykres ---
+    # plotting
     fig, ax = plt.subplots(figsize=(10, 4))
 
     ax.fill_between(
