@@ -7,6 +7,8 @@ from datetime import timedelta
 import boto3
 from botocore.exceptions import ClientError
 
+import numpy as np
+import matplotlib.pyplot as plt
 
 import pandas as pd
 import streamlit as st
@@ -50,6 +52,7 @@ AUTO_MODE_LABEL = "Automatyczny (najlepsze dostępne dane)"
 
 if st.session_state.get("btn_reset"):
     st.session_state["user_text"] = ""
+    st.session_state.pop("y_hat", None)
     st.session_state["model_mode"] = AUTO_MODE_LABEL
     st.session_state.pop("btn_reset", None)
     st.rerun()
@@ -588,6 +591,63 @@ def pandera_errors_to_user_messages(
     # remove duplicates
     return list(dict.fromkeys(messages))
 
+def render_pace_plot(y_hat: float):   
+    # --- dystans ---
+    total_km = 21
+    km = np.arange(1, total_km + 1)
+
+    # --- średnie tempo (min/km) ---
+    avg_pace = (y_hat / 60) / 21.0975
+
+    # --- realistyczna zmienność ---
+    np.random.seed(42)  # stabilna wizualizacja
+    noise = np.random.normal(0, 0.12, size=total_km)      # losowe wahania (~±7 s/km)
+    fatigue_trend = np.linspace(0, 0.15, total_km)        # narastające zmęczenie (~+9 s/km)
+
+    # surowa seria tempa
+    pace_series = avg_pace + noise + fatigue_trend
+
+    # 🔑 KLUCZOWA POPRAWKA:
+    # wymuszamy, aby średnia serii = avg_pace
+    pace_series -= pace_series.mean() - avg_pace
+
+    # --- pas zmienności ---
+    variability = 0.15  # ~±9 s/km
+    lower = pace_series - variability
+    upper = pace_series + variability
+
+    # --- wykres ---
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    ax.fill_between(
+        km,
+        lower,
+        upper,
+        alpha=0.25,
+        label="Typowa zmienność tempa"
+    )
+
+    ax.plot(
+        km,
+        pace_series,
+        linewidth=2,
+        label="Szacowane tempo km po km"
+    )
+
+    ax.axhline(
+        avg_pace,
+        linestyle="--",
+        linewidth=1.5,
+        label="Średnie tempo"
+    )
+
+    ax.set_xlabel("Kilometr")
+    ax.set_ylabel("Tempo [min/km]")
+    ax.set_xlim(1, total_km)
+    ax.legend()
+
+    st.pyplot(fig, use_container_width=True) 
+
 
 # -------------------------
 # UI
@@ -804,6 +864,7 @@ if btn_extract or btn_predict:
         with col4:
             if btn_predict:
                 y_hat = run_prediction(model, validated_df)
+                st.session_state["y_hat"] = y_hat
 
                 MODEL_LABELS = {
                     "PRE_RACE_5K": "model 5K",
@@ -835,10 +896,23 @@ if btn_extract or btn_predict:
                 )
 
                 st.markdown("### 💪 Powodzenia!")
-                st.balloons()
+                st.balloons()        
 
     finally:
         lf_flush_safe()
+
+if "y_hat" in st.session_state:
+    y_hat = st.session_state["y_hat"]
+
+    st.divider()
+    st.subheader("🏃 Przykładowe tempo biegu – realistyczna wizualizacja")
+    render_pace_plot(y_hat)
+    st.caption(
+        "Wizualizacja przedstawia przykładowy przebieg tempa biegu przy prognozowanym czasie półmaratonu. "
+        "Falowanie i pas zmienności ilustrują typowe wahania tempa oraz narastające zmęczenie, "
+        "a nie dokładną predykcję tempa na poszczególnych kilometrach."
+    )
+
 
 btn_reset = st.button(
     "🔄 Reset – zacznij od nowa",
