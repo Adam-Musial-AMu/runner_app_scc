@@ -2,11 +2,13 @@
 import json
 import re
 import os
+import zipfile
+import requests
 from pathlib import Path
 from datetime import timedelta
 
-import boto3
-from botocore.exceptions import ClientError
+# import boto3
+# from botocore.exceptions import ClientError
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -59,88 +61,97 @@ if st.session_state.get("btn_reset"):
     st.rerun()
 
 # -------------------------
-# DigitalOcean Spaces config
+# GitHub Releases – MODELS
 # -------------------------
-SPACES_BUCKET = os.getenv("SPACES_BUCKET", "amu")
-SPACES_ENDPOINT = os.getenv("SPACES_ENDPOINT")
-SPACES_KEY = os.getenv("SPACES_KEY")
-SPACES_SECRET = os.getenv("SPACES_SECRET")
+GH_OWNER = "adam-musial-amu"
+GH_REPO = "runner_app_scc_training_assets"
+GH_MODEL_TAG = "models-v1.0.0"
+
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # required (private repo)
 
 CACHE_DIR = Path("/tmp/hm_artifacts")
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-if not all([SPACES_ENDPOINT, SPACES_KEY, SPACES_SECRET]):
-    st.error(
-        "❌ Brak konfiguracji DigitalOcean Spaces "
-        "(SPACES_ENDPOINT / SPACES_KEY / SPACES_SECRET)"
-    )
-    st.stop()
+
+# -------------------------
+# DigitalOcean Spaces config
+# -------------------------
+# SPACES_BUCKET = os.getenv("SPACES_BUCKET", "amu")
+# SPACES_ENDPOINT = os.getenv("SPACES_ENDPOINT")
+# SPACES_KEY = os.getenv("SPACES_KEY")
+# SPACES_SECRET = os.getenv("SPACES_SECRET")
+
+# CACHE_DIR = Path("/tmp/hm_artifacts")
+
+# if not all([SPACES_ENDPOINT, SPACES_KEY, SPACES_SECRET]):
+#     st.error(
+#         "❌ Brak konfiguracji DigitalOcean Spaces "
+#         "(SPACES_ENDPOINT / SPACES_KEY / SPACES_SECRET)"
+#     )
+#     st.stop()
 
 
 # -------------------------
 # Helpers
 # -------------------------
 
-def get_s3_client():
-    return boto3.client(
-        "s3",
-        endpoint_url=SPACES_ENDPOINT,
-        aws_access_key_id=SPACES_KEY,
-        aws_secret_access_key=SPACES_SECRET,
+def _gh_headers():
+    h = {"Accept": "application/vnd.github+json"}
+    if GITHUB_TOKEN:
+        h["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+    return h
+
+
+def _download_and_extract_bundle(bundle_name: str, target_dir: Path):
+    target_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = target_dir / bundle_name
+
+    api = (
+        f"https://api.github.com/repos/{GH_OWNER}/{GH_REPO}"
+        f"/releases/tags/{GH_MODEL_TAG}"
     )
+    r = requests.get(api, headers=_gh_headers())
+    r.raise_for_status()
+    release = r.json()
+
+    asset = next(a for a in release["assets"] if a["name"] == bundle_name)
+
+    r = requests.get(
+        asset["url"],
+        headers={**_gh_headers(), "Accept": "application/octet-stream"},
+        stream=True,
+    )
+    r.raise_for_status()
+
+    with open(zip_path, "wb") as f:
+        for chunk in r.iter_content(8192):
+            if chunk:
+                f.write(chunk)
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(target_dir)
 
 
-def load_latest_bundle(model_subdir: str):
+def load_latest_bundle(model_key: str):
     """
-    Pobiera artefakty z DO Spaces:
-      s3://amu/artifacts/<model_subdir>/
-    i zapisuje lokalnie do:
-      /tmp/hm_artifacts/<model_subdir>/
+    model_key: 'pre_race_5k' albo 'pre_race_10k'
     """
-    s3 = get_s3_client()
+    bundle = f"{model_key}_bundle.zip"
+    local_dir = CACHE_DIR / model_key
 
-    remote_prefix = f"artifacts/{model_subdir}"
-    local_dir = CACHE_DIR / model_subdir
-    local_dir.mkdir(parents=True, exist_ok=True)
+    if not (local_dir / "latest.json").exists():
+        _download_and_extract_bundle(bundle, local_dir)
 
-    # --- latest.json ---
-    latest_path = local_dir / "latest.json"
+    latest = json.loads((local_dir / "latest.json").read_text(encoding="utf-8"))
 
-    try:
-        s3.download_file(
-            SPACES_BUCKET,
-            f"{remote_prefix}/latest.json",
-            str(latest_path),
-        )
-    except ClientError as e:
-        raise RuntimeError(
-            f"Brak latest.json w s3://{SPACES_BUCKET}/{remote_prefix}"
-        ) from e
-
-
-    latest = json.loads(latest_path.read_text(encoding="utf-8"))
-
-    # --- other files ---
     model_pkl = local_dir / latest["model_pkl"]
     meta_json = local_dir / latest["metadata_json"]
     schema_json = local_dir / latest["schema_json"]
 
-    for remote_name, local_path in [
-        (latest["model_pkl"], model_pkl),
-        (latest["metadata_json"], meta_json),
-        (latest["schema_json"], schema_json),
-    ]:
-        s3.download_file(
-            SPACES_BUCKET,
-            f"{remote_prefix}/{remote_name}",
-            str(local_path),
-        )
-
     schema = json.loads(schema_json.read_text(encoding="utf-8"))
     metadata = json.loads(meta_json.read_text(encoding="utf-8"))
 
-    # PyCaret: path without .pkl
-    model_stem = str(model_pkl.with_suffix(""))
-    model = load_model(model_stem)
+    model = load_model(str(model_pkl.with_suffix("")))
 
     return {
         "latest": latest,
@@ -152,6 +163,80 @@ def load_latest_bundle(model_subdir: str):
         "meta_json": str(meta_json),
         "schema_json": str(schema_json),
     }
+
+
+# def get_s3_client():
+#     return boto3.client(
+#         "s3",
+#         endpoint_url=SPACES_ENDPOINT,
+#         aws_access_key_id=SPACES_KEY,
+#         aws_secret_access_key=SPACES_SECRET,
+#     )
+
+
+# def load_latest_bundle(model_subdir: str):
+#     """
+#     Pobiera artefakty z DO Spaces:
+#       s3://amu/artifacts/<model_subdir>/
+#     i zapisuje lokalnie do:
+#       /tmp/hm_artifacts/<model_subdir>/
+#     """
+#     s3 = get_s3_client()
+
+#     remote_prefix = f"artifacts/{model_subdir}"
+#     local_dir = CACHE_DIR / model_subdir
+#     local_dir.mkdir(parents=True, exist_ok=True)
+
+#     # --- latest.json ---
+#     latest_path = local_dir / "latest.json"
+
+#     try:
+#         s3.download_file(
+#             SPACES_BUCKET,
+#             f"{remote_prefix}/latest.json",
+#             str(latest_path),
+#         )
+#     except ClientError as e:
+#         raise RuntimeError(
+#             f"Brak latest.json w s3://{SPACES_BUCKET}/{remote_prefix}"
+#         ) from e
+
+
+#     latest = json.loads(latest_path.read_text(encoding="utf-8"))
+
+#     # --- other files ---
+#     model_pkl = local_dir / latest["model_pkl"]
+#     meta_json = local_dir / latest["metadata_json"]
+#     schema_json = local_dir / latest["schema_json"]
+
+#     for remote_name, local_path in [
+#         (latest["model_pkl"], model_pkl),
+#         (latest["metadata_json"], meta_json),
+#         (latest["schema_json"], schema_json),
+#     ]:
+#         s3.download_file(
+#             SPACES_BUCKET,
+#             f"{remote_prefix}/{remote_name}",
+#             str(local_path),
+#         )
+
+#     schema = json.loads(schema_json.read_text(encoding="utf-8"))
+#     metadata = json.loads(meta_json.read_text(encoding="utf-8"))
+
+#     # PyCaret: path without .pkl
+#     model_stem = str(model_pkl.with_suffix(""))
+#     model = load_model(model_stem)
+
+#     return {
+#         "latest": latest,
+#         "schema": schema,
+#         "metadata": metadata,
+#         "model": model,
+#         "artifact_dir": local_dir,
+#         "model_pkl": str(model_pkl),
+#         "meta_json": str(meta_json),
+#         "schema_json": str(schema_json),
+#     }
 
 
 def lf_flush_safe():
