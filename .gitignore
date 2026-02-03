@@ -13,6 +13,8 @@ data/
 artifacts/
 *.csv
 data_bundle.zip
+pre_race_5k_bundle.zip
+pre_race_10k_bundle.zip
 
 # =========================
 # Logi
