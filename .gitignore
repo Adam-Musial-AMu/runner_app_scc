@@ -12,6 +12,7 @@ __pycache__/
 data/
 artifacts/
 *.csv
+data_bundle.zip
 
 # =========================
 # Logi
