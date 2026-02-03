@@ -152,10 +152,14 @@ Langfuse integration is **optional** — the application runs fully without it.
 
 ---
 
-## 🚀 Local Development
+## 🚀 Local Development & Execution
 
+To run the application locally:
+
+```bash
 pip install -r requirements.txt
 streamlit run app.py
+```
 
 **Note:**
 - Model artifacts are downloaded from GitHub Releases at application startup.
@@ -323,8 +327,10 @@ Integracja jest **opcjonalna** — aplikacja działa również bez Langfuse.
 
 ## 🚀 Uruchomienie lokalne
 
+```bash
 pip install -r requirements.txt
 streamlit run app.py
+```
 
 **Uwaga:**
 - Aplikacja pobiera modele z GitHub Releases przy starcie.
